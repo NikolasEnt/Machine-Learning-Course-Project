@@ -1,0 +1,152 @@
+---
+title: "Machine Learning Course Project"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#Project discription
+
+##Background
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+##Data
+
+The training data for this project are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+Detailed documentation on the research can be found http://groupware.les.inf.puc-rio.br/public/papers/2013.Velloso.QAR-WLE.pdf
+
+##Goals of the project
+
+The goal of your project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set. You may use any of the other variables to predict with. You should create a report describing how you built your model, how you used cross validation, what you think the expected out of sample error is, and why you made the choices you did. You will also use your prediction model to predict 20 different test cases.
+
+#Preprocessing and preparations
+We will need some libraries to complete the project.
+```{r, message=FALSE, warning=FALSE}
+library(caret)
+library(randomForest)
+library(rpart)
+library(rpart.plot)
+library(randomForest)
+```
+
+#Data getting and cleaning
+```{r}
+#load the raw data
+trainSet_raw <- read.csv("./pml-training.csv", na.strings = c("NA", ""))
+testSet_raw <- read.csv("./pml-testing.csv", na.strings = c("NA", ""))
+#Delete columns with not important for prediction information: x, user_name, raw_timestamp_part_1, raw_timestamp_part_,2 cvtd_timestamp, new_window, num_window
+trainSet<-trainSet_raw[,-c(1:7)]
+testSet<-testSet_raw[,-c(1:7)]
+#Delete columns with NAs only
+ind_to_del<-colSums(is.na(trainSet)) == 0
+trainSet<-trainSet[,ind_to_del]
+testSet<-testSet[,ind_to_del]
+
+dim(trainSet)
+dim(testSet)
+```
+
+As we can see, the trainSet consists of 19622 observations of 53 variables; the testSet - 20 observations of 53 variables
+
+We have a faclor "Classe" with 5 levels: A, B, C, D, E.
+
+According to the documentation, they correspond to:
+
+A - exactly according to the specification exercise performance
+
+B - throwing the elbows to the front
+
+C - lifting the dumbbell only halfway
+
+D - lowering the dumbbell only halfway
+
+E - throwing the hips to the front
+
+Let's inspect the trainSet:
+
+```{r}
+barplot(summary(trainSet$classe), col="green", xlab="Class", ylab="Number of observations", main="trainSet content")
+
+```
+
+
+As we can see, there are a lot of observations for each class with A predomination. Other preprocessions (feature scaling etc.) was not performed.
+
+##trainSet splitting
+
+Split the trainSet into a 75% training and 25% testing datasubsets without replacement.
+```{r}
+#set seed to my favourite number for reproducibility
+set.seed(22)
+inTrain <- createDataPartition(y=trainSet$classe, p=0.75, list=FALSE)
+trainSubSet<-trainSet[inTrain,]
+testSubSet<-trainSet[-inTrain,]
+```
+
+#Models
+##Decision Tree
+
+One of the most obvious classifiers - Decision Tree. So, it is a good starting point.
+Use of the Decision Tree Model to class prediction
+```{r}
+#model fitting
+dt_fit <- rpart(classe ~ ., data=trainSubSet, method="class")
+#Decision Tree plot
+rpart.plot(dt_fit, cex=0.5, fallen.leaves = FALSE, extra=108)
+```
+
+For each node the probability of the fitted class and the percentage of observations in the node are displayed.
+
+In order to evaluate the classifier we can analyse the confusion matrix with the testSubSet:
+```{r}
+#predicting of class on the testSubSet
+predict_dt <- predict(dt_fit, testSubSet, type = "class")
+confusionMatrix(predict_dt, testSubSet$classe)
+```
+
+The model has acciracy <75%, so, it is a good idea to find other approaches.
+
+
+##Random Forest
+To produce better Model we will use a Random Forest by constructing a multitude of decision trees at training time and outputting the class that is the mode of the classes. 
+```{r}
+#model fitting
+rf_fit <- randomForest(classe ~., data=trainSubSet, method="class")
+rf_fit$ntree
+rf_fit$mtry
+```
+
+There are 500 trees and 7 predictors sampled for spliting at each node.
+
+In order to evaluate the classifier we can analyse the confusion matrix with the testSubSet:
+```{r}
+#predicting of class on the testSubSet
+predict_rf <- predict(rf_fit, testSubSet, type = "class")
+confusionMatrix(predict_rf, testSubSet$classe)
+```
+
+As we can see, accuracy is >99%.
+
+#Results
+The expected out-of-sample error was estimated as 1 - accuracy for predictions made against the testSubSet. For the random Forest model it is less then 0.5%, that is why we will use it to make predictions for the quiz.
+
+#testSet predictions
+Random forest performs better, so we can use in to make predictions on the testSet in order to submit it to the Course Project Prediction Quiz.
+```{r}
+predict(rf_fit, testSet)
+```
+
+#References
+1. Velloso, E.; Bulling, A.; Gellersen, H.; Ugulino, W.; Fuks, H. Qualitative Activity Recognition of Weight Lifting Exercises. Proceedings of 4th International Conference in Cooperation with SIGCHI (Augmented Human '13) . Stuttgart, Germany: ACM SIGCHI, 2013
+
+Read more: http://groupware.les.inf.puc-rio.br/har#ixzz4KEHpicnj
